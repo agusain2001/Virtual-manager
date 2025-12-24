@@ -11,6 +11,7 @@ The **Manager Orchestrator** is the root node of the LangGraph system. It acts a
   - `intent: personnel/leave` -> **People Ops Agent**
   - `intent: status/check` -> **Execution Agent**
   - `intent: notify` -> **Communication Agent**
+  - `intent: strategy/risk` -> **Managerial Agent**
 
 ## 🕵️ Planning Agent (`backend/app/agents/planning.py`)
 
@@ -38,13 +39,24 @@ The **Manager Orchestrator** is the root node of the LangGraph system. It acts a
   - **Monitoring**: Polls the database for tasks approaching deadlines.
   - **Blocker Detection**: Identifies tasks with no recent updates.
   - **Escalation**: Triggers the Manager Orchestrator to re-assign or notify stakeholders if a hard blocker is found.
+  - **Milestone Tracking**: Validates critical path progress.
+
+## 👔 Managerial Agent (`backend/app/agents/managerial.py`)
+
+*The Executive.*
+- **Role**: Provides high-level strategic oversight, risk analysis, and communication synthesis.
+- **Capabilities**:
+  - **Risk Analysis**: Evaluates task delays and resource bottlenecks to predict project risks.
+  - **Goal Refinement**: Uses AI to structure vague objectives into measurable KPIs.
+  - **Reporting**: Generates automated standups, weekly reports, and stakeholder updates.
+  - **Meeting Intelligence**: Summarizes transcripts into decisions and action items.
 
 ## 📣 Communication Agent (`backend/app/agents/communication.py`)
 
 *The Spokesperson.*
 - **Role**: Manages all outgoing information to humans.
 - **Capabilities**:
-  - **summarization**: Compresses complex logs into readable status updates.
+  - **Summarization**: Compresses complex logs into readable status updates.
   - **Routing**: Decides whether to ping via Slack (urgent) or Email (digest).
   - **Tone Adaptation**: Adjusts language based on whether it's talking to a dev (technical) or a stakeholder (high-level).
 

@@ -22,6 +22,7 @@ graph TD
         Orchestrator --> People[People Ops Agent]
         Orchestrator --> Exec[Execution Agent]
         Orchestrator --> Comm[Communication Agent]
+        Orchestrator --> Managerial[Managerial Agent]
     end
     
     subgraph "Memory & Tools"
@@ -29,15 +30,17 @@ graph TD
         People --> Cal[Calendar MCP]
         Exec --> Mon[Task Monitors]
         Comm --> Slack[Slack/Email MCP]
+        Managerial --> Strategy[Risk & Strategy DB]
     end
 ```
 
 ## ✨ Key Features
 
 - **🧠 Autonomous Planning**: Decomposes high-level goals (e.g., "Launch Marketing Campaign") into actionable steps and dependency graphs.
-- **busts People Operations**: Handling leave requests, team availability, and resource allocation automatically against policies.
+- **🤝 People Operations**: Handling leave requests, team availability, and resource allocation automatically against policies.
 - **👁️ Active Monitoring**: Continuously watches task statuses and proactively flags risks before deadlines are missed.
-- **🛡️ Human Control Plane**: A "God Mode" dashboard to observe agent thought processes in real-time and intervene/override actions instantly.
+- **� Managerial Intelligence**: Provides strategic risk analysis, goal refinement, and automates standups/reporting.
+- **�🛡️ Human Control Plane**: A "God Mode" dashboard to observe agent thought processes in real-time and intervene/override actions instantly.
 - **🔌 Deep Integration**: Built on MCP to plug into Google Calendar, Slack, GitHub, and Jira without custom glue code.
 
 ## 🚀 Getting Started
@@ -96,16 +99,18 @@ Dashboard runs on: `http://localhost:3000`
 Virtual-manager/
 ├── backend/                 # Python/FastAPI Agent Core
 │   ├── app/
-│   │   ├── agents/          # Agent Logic (Orchestrator, Planning, etc.)
+│   │   ├── agents/          # Agent Logic (Orchestrator, Planning, Execution, Managerial, etc.)
 │   │   ├── core/            # Config, Database, Logging, Memory
 │   │   ├── mcp/             # Model Context Protocol Tool Servers
+│   │   ├── routers/         # API Endpoints (Goals, Projects, Managerial, etc.)
+│   │   ├── services/        # Business Logic (Monitoring, Milestones)
 │   │   └── main.py          # API Entry Point
 │   └── requirements.txt
 │
 ├── frontend/                # Next.js Control Plane
 │   ├── src/
 │   │   ├── app/             # Pages & Layouts
-│   │   └── components/      # UI Components (ActivityLog, Modal)
+│   │   └── components/      # UI Components (VAMDashboard, ManagerialDashboard, etc.)
 │   └── package.json
 │
 ├── AGENTS.md                # Detailed Agent Documentation
