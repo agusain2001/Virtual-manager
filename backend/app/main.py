@@ -22,7 +22,12 @@ app.add_middleware(
 )
 
 # Include API routes
-app.include_router(router)
+app.include_router(api_router, prefix="/api")
+
+# Include the new Managerial Intelligence router
+# This makes endpoints available at /api/managerial/analyze-risks, etc.
+app.include_router(managerial.router, prefix="/api")
+
 
 @app.get("/")
 async def root():
