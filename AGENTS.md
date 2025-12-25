@@ -98,6 +98,18 @@ The **Manager Orchestrator** is the root node of the LangGraph system. It acts a
   - **Idempotency**: Prevents duplicate operations.
   - **Health Monitoring**: System health checks and observability.
 
+## 🔮 Advanced Capabilities Agent (`backend/app/agents/advanced_capabilities.py`)
+
+*The Extension Platform.*
+- **Role**: Sandboxed platform for customization, extensions, and advanced features.
+- **Capabilities**:
+  - **Rules Engine**: Organization-specific condition-action rules with conflict resolution.
+  - **Custom Workflows**: DAG-based workflows with cycle detection and validation.
+  - **Plugin System**: Sandboxed plugin execution with timeouts and schema validation.
+  - **Voice Intents**: Voice-to-intent pipeline (confirmation always required).
+  - **Predictive Staffing**: Headcount recommendations with confidence bands.
+  - **Performance Coaching**: Private, supportive feedback (no ranking).
+
 ## 🔌 MCP Tool Integration
 
 VAM uses the **Model Context Protocol (MCP)** to interact with the outside world safely.

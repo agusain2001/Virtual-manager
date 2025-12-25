@@ -111,6 +111,30 @@ class OperationStatus(enum.Enum):
     COMPLETED = "completed"
     FAILED = "failed"
 
+class RuleAction(enum.Enum):
+    RECOMMEND = "recommend"
+    BLOCK = "block"
+    REQUIRE_APPROVAL = "require_approval"
+
+class RuleScope(enum.Enum):
+    TASKS = "tasks"
+    PEOPLE = "people"
+    FINANCE = "finance"
+    HIRING = "hiring"
+    ALL = "all"
+
+class WorkflowStatus(enum.Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    PAUSED = "paused"
+    ARCHIVED = "archived"
+
+class PluginStatus(enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    ACTIVE = "active"
+    DISABLED = "disabled"
+
 # ==================== ASSOCIATION TABLES ====================
 
 # Milestone-Task many-to-many relationship
@@ -831,3 +855,247 @@ class OperationLock(Base):
     actor_id = Column(String)
     
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ==================== FUTURE & ADVANCED CAPABILITIES MODELS ====================
+
+class OrganizationRule(Base):
+    """
+    Organization-specific rules for customization.
+    Maps to: Rules Engine requirements.
+    
+    CONSTRAINT: Rules cannot override security policies or platform safety gates.
+    """
+    __tablename__ = "organization_rules"
+    
+    id = Column(String, primary_key=True)
+    organization_id = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    
+    # Condition and action
+    condition = Column(Text, nullable=False)  # JSON structured expression
+    action = Column(Enum(RuleAction), nullable=False)
+    scope = Column(Enum(RuleScope), default=RuleScope.ALL)
+    
+    # Priority for conflict resolution (higher = more priority)
+    priority = Column(Integer, default=50)
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    
+    # Metadata
+    created_by = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CustomWorkflow(Base):
+    """
+    DAG-based custom workflow definitions.
+    Maps to: Custom Workflows requirements.
+    
+    CONSTRAINT: No direct data mutation, no bypassing approval steps.
+    """
+    __tablename__ = "custom_workflows"
+    
+    id = Column(String, primary_key=True)
+    organization_id = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    
+    # DAG definition
+    trigger = Column(String)  # Event that triggers workflow
+    steps = Column(Text, nullable=False)  # JSON array of WorkflowStep
+    
+    # Status
+    status = Column(Enum(WorkflowStatus), default=WorkflowStatus.DRAFT)
+    
+    # Validation
+    is_validated = Column(Boolean, default=False)
+    validation_errors = Column(Text)  # JSON array of errors
+    last_validated_at = Column(DateTime)
+    
+    # Dry run
+    last_dry_run_at = Column(DateTime)
+    dry_run_result = Column(Text)  # JSON result
+    
+    created_by = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Plugin(Base):
+    """
+    Plugin-style extension registry.
+    Maps to: Plugin System requirements.
+    
+    CONSTRAINT: Runs in sandbox with timeout/memory limits.
+    Plugin crash must not affect core system.
+    """
+    __tablename__ = "plugins"
+    
+    id = Column(String, primary_key=True)
+    organization_id = Column(String, index=True)  # null = global plugin
+    
+    # Metadata
+    name = Column(String, nullable=False)
+    version = Column(String, nullable=False)
+    description = Column(Text)
+    author = Column(String)
+    
+    # Permissions and schemas
+    required_permissions = Column(Text)  # JSON array
+    input_schema = Column(Text)  # JSON schema
+    output_schema = Column(Text)  # JSON schema
+    
+    # Execution config
+    entry_point = Column(String)  # Function to call
+    timeout_seconds = Column(Integer, default=30)
+    memory_limit_mb = Column(Integer, default=128)
+    
+    # Status
+    status = Column(Enum(PluginStatus), default=PluginStatus.PENDING)
+    
+    # Usage stats
+    execution_count = Column(Integer, default=0)
+    last_executed_at = Column(DateTime)
+    error_count = Column(Integer, default=0)
+    last_error = Column(Text)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class VoiceIntent(Base):
+    """
+    Parsed voice command intents.
+    Maps to: Voice-Based Management requirements.
+    
+    CONSTRAINT: Voice produces intent only, never action.
+    Sensitive intents always require confirmation.
+    """
+    __tablename__ = "voice_intents"
+    
+    id = Column(String, primary_key=True)
+    organization_id = Column(String, index=True)
+    user_id = Column(String, nullable=False)
+    
+    # Voice data
+    transcription = Column(Text, nullable=False)
+    confidence = Column(Float)  # Transcription confidence
+    
+    # Parsed intent
+    intent_type = Column(String)  # The detected intent
+    intent_params = Column(Text)  # JSON parameters
+    is_sensitive = Column(Boolean, default=False)
+    
+    # Confirmation
+    requires_confirmation = Column(Boolean, default=True)
+    confirmed = Column(Boolean, default=False)
+    confirmed_at = Column(DateTime)
+    
+    # Execution
+    executed = Column(Boolean, default=False)
+    execution_result = Column(Text)  # JSON result
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StaffingPrediction(Base):
+    """
+    Predictive staffing recommendations.
+    Maps to: Predictive Staffing requirements.
+    
+    CONSTRAINT: Cannot trigger hiring. Recommendation only.
+    """
+    __tablename__ = "staffing_predictions"
+    
+    id = Column(String, primary_key=True)
+    organization_id = Column(String, nullable=False, index=True)
+    
+    # Prediction context
+    department = Column(String)
+    role_type = Column(String)
+    time_horizon = Column(String)  # e.g., "Q1 2025", "next_6_months"
+    
+    # Recommendation
+    recommended_headcount = Column(Integer)
+    confidence_lower = Column(Integer)  # Lower bound
+    confidence_upper = Column(Integer)  # Upper bound
+    confidence_level = Column(Float)  # 0-1
+    
+    # Assumptions
+    assumptions = Column(Text)  # JSON array of assumptions
+    data_sources = Column(Text)  # JSON array of sources used
+    
+    # Signals used
+    historical_workload = Column(Text)  # JSON summary
+    task_velocity = Column(Text)  # JSON summary
+    growth_signals = Column(Text)  # JSON summary
+    
+    generated_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime)  # Prediction validity
+
+
+class PerformanceFeedback(Base):
+    """
+    Private AI-assisted performance coaching.
+    Maps to: AI-Assisted Performance Coaching requirements.
+    
+    CONSTRAINT: Private, optional, supportive.
+    No ranking employees. No sharing without consent.
+    """
+    __tablename__ = "performance_feedback"
+    
+    id = Column(String, primary_key=True)
+    organization_id = Column(String, nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)  # Owner of feedback
+    
+    # Feedback content
+    feedback_type = Column(String)  # strength, growth_area, suggestion
+    content = Column(Text, nullable=False)
+    context = Column(Text)  # What prompted this feedback
+    
+    # Privacy
+    is_private = Column(Boolean, default=True)
+    consent_to_share = Column(Boolean, default=False)
+    shared_with = Column(Text)  # JSON array of user IDs if shared
+    
+    # User response
+    is_read = Column(Boolean, default=False)
+    read_at = Column(DateTime)
+    is_helpful = Column(Boolean)
+    user_notes = Column(Text)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class FeatureFlag(Base):
+    """
+    Per-organization feature toggles.
+    Maps to: Configuration & State Management requirements.
+    """
+    __tablename__ = "feature_flags"
+    
+    id = Column(String, primary_key=True)
+    organization_id = Column(String, nullable=False, index=True)
+    
+    # Flag definition
+    flag_key = Column(String, nullable=False)
+    flag_value = Column(Boolean, default=False)
+    
+    # Rollout
+    rollout_percentage = Column(Integer, default=100)  # 0-100
+    
+    # Versioning
+    version = Column(Integer, default=1)
+    previous_value = Column(Boolean)
+    
+    # Metadata
+    description = Column(Text)
+    changed_by = Column(String)
+    change_reason = Column(Text)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
