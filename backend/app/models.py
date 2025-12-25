@@ -37,6 +37,27 @@ class EscalationStatus(enum.Enum):
     ACKNOWLEDGED = "acknowledged"
     RESOLVED = "resolved"
 
+class LeaveStatus(enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+class SkillProficiency(enum.Enum):
+    BEGINNER = "beginner"
+    INTERMEDIATE = "intermediate"
+    EXPERT = "expert"
+
+class MeetingStatus(enum.Enum):
+    SCHEDULED = "scheduled"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+class ParticipantStatus(enum.Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+
 # ==================== ASSOCIATION TABLES ====================
 
 # Milestone-Task many-to-many relationship
@@ -45,6 +66,14 @@ milestone_tasks = Table(
     Base.metadata,
     Column('milestone_id', String, ForeignKey('milestones.id'), primary_key=True),
     Column('task_id', String, ForeignKey('tasks.id'), primary_key=True)
+)
+
+# Meeting-Participant many-to-many relationship
+meeting_participants = Table(
+    'meeting_participants',
+    Base.metadata,
+    Column('meeting_id', String, ForeignKey('meetings.id'), primary_key=True),
+    Column('employee_id', String, ForeignKey('employees.id'), primary_key=True)
 )
 
 # ==================== MODELS ====================
@@ -264,4 +293,139 @@ class DailyUpdate(Base):
     progress_notes = Column(Text)
     hours_worked = Column(Integer, default=0)
     blockers = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ==================== PEOPLE & OPERATIONS MODELS ====================
+
+class Employee(Base):
+    """
+    Employee profile for People & Operations management.
+    Maps to: Team & People Management requirements.
+    """
+    __tablename__ = "employees"
+    
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False)
+    role = Column(String, nullable=False)
+    department = Column(String)
+    timezone = Column(String, default="UTC")  # e.g., "America/New_York"
+    working_hours_start = Column(String, default="09:00")  # 24h format
+    working_hours_end = Column(String, default="17:00")    # 24h format
+    leave_balance = Column(Integer, default=20)  # Days remaining
+    current_workload_hours = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    skills = relationship("EmployeeSkill", back_populates="employee", cascade="all, delete-orphan")
+    meetings = relationship("Meeting", secondary="meeting_participants", back_populates="participants")
+
+
+class EmployeeSkill(Base):
+    """
+    Employee skills for skill matrix tracking.
+    Maps to: Track Skills and Expertise requirements.
+    """
+    __tablename__ = "employee_skills"
+    
+    id = Column(String, primary_key=True)
+    employee_id = Column(String, ForeignKey("employees.id"), nullable=False)
+    skill_name = Column(String, nullable=False)
+    proficiency = Column(Enum(SkillProficiency), default=SkillProficiency.BEGINNER)
+    years_experience = Column(Integer, default=0)
+    is_primary = Column(Boolean, default=False)  # Primary skill
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    employee = relationship("Employee", back_populates="skills")
+
+
+class Meeting(Base):
+    """
+    Meeting model for calendar management.
+    Maps to: Meeting & Calendar Management requirements.
+    """
+    __tablename__ = "meetings"
+    
+    id = Column(String, primary_key=True)
+    title = Column(String, nullable=False)
+    description = Column(Text)
+    organizer = Column(String, nullable=False)
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=False)
+    timezone = Column(String, default="UTC")
+    location = Column(String)  # Room or virtual link
+    status = Column(Enum(MeetingStatus), default=MeetingStatus.SCHEDULED)
+    agenda = Column(Text)  # Meeting agenda
+    action_items = Column(Text)  # JSON array of action items
+    meeting_notes = Column(Text)  # Post-meeting notes
+    related_project_id = Column(String, ForeignKey("projects.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    participants = relationship("Employee", secondary="meeting_participants", back_populates="meetings")
+
+
+class LeaveRequest(Base):
+    """
+    Leave request with approval workflow.
+    Maps to: Leave, Holiday & Attendance Management requirements.
+    """
+    __tablename__ = "leave_requests"
+    
+    id = Column(String, primary_key=True)
+    employee_id = Column(String, ForeignKey("employees.id"), nullable=False)
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=False)
+    leave_type = Column(String, nullable=False)  # vacation, sick, personal, emergency
+    days_requested = Column(Integer, nullable=False)
+    reason = Column(Text)
+    status = Column(Enum(LeaveStatus), default=LeaveStatus.PENDING)
+    
+    # Approval workflow
+    reviewed_by = Column(String)
+    reviewed_at = Column(DateTime)
+    approval_rationale = Column(Text)  # Required for all decisions
+    rejection_alternative = Column(Text)  # Suggested alternative dates if rejected
+    
+    # Impact tracking
+    has_delivery_impact = Column(Boolean, default=False)
+    impact_description = Column(Text)
+    coverage_plan = Column(Text)  # Who covers during absence
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BurnoutIndicator(Base):
+    """
+    Burnout risk tracking for team members.
+    Maps to: Monitor Workload and Burnout Risk requirements.
+    """
+    __tablename__ = "burnout_indicators"
+    
+    id = Column(String, primary_key=True)
+    employee_id = Column(String, ForeignKey("employees.id"), nullable=False)
+    assessment_date = Column(DateTime, default=datetime.utcnow)
+    
+    # Risk indicators
+    sustained_overload_weeks = Column(Integer, default=0)  # Weeks > 40h
+    consecutive_deadline_pressure = Column(Integer, default=0)  # Count
+    days_since_last_break = Column(Integer, default=0)
+    overtime_hours_this_month = Column(Integer, default=0)
+    
+    # Calculated risk
+    risk_level = Column(String)  # low, medium, high, critical
+    risk_score = Column(Integer, default=0)  # 0-100
+    
+    # Recommendations
+    recommendation = Column(Text)
+    is_flagged = Column(Boolean, default=False)
+    acknowledged_by = Column(String)
+    acknowledged_at = Column(DateTime)
+    
     created_at = Column(DateTime, default=datetime.utcnow)

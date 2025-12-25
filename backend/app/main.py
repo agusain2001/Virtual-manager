@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.database import engine, Base
 from backend.app.routes import router as api_router
-from backend.app.routers import managerial, goals, milestones, execution
+from backend.app.routers import managerial, goals, milestones, execution, people_ops
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -30,6 +30,7 @@ app.include_router(managerial.router, prefix="/api")
 app.include_router(goals.router, prefix="/api")
 app.include_router(milestones.router, prefix="/api")
 app.include_router(execution.router, prefix="/api")
+app.include_router(people_ops.router)
 
 
 @app.get("/")
@@ -45,7 +46,8 @@ async def root():
             "Execution Monitoring",
             "Managerial Intelligence",
             "Escalation System",
-            "Agent Orchestration"
+            "Agent Orchestration",
+            "People & Operations"
         ]
     }
 
