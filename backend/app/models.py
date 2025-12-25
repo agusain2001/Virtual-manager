@@ -153,6 +153,14 @@ meeting_participants = Table(
     Column('employee_id', String, ForeignKey('employees.id'), primary_key=True)
 )
 
+# Task Dependencies - DAG relationships (blocker -> blocked)
+task_dependencies = Table(
+    'task_dependencies',
+    Base.metadata,
+    Column('blocker_id', String, ForeignKey('tasks.id'), primary_key=True),
+    Column('blocked_id', String, ForeignKey('tasks.id'), primary_key=True)
+)
+
 # ==================== MODELS ====================
 
 class Goal(Base):

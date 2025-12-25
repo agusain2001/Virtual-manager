@@ -66,6 +66,62 @@ async def get_daily_summary(
     return monitor.collect_daily_summary(project_id)
 
 
+@router.get("/projects/{project_id}/health")
+async def get_project_health(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get project health based on task status.
+    
+    Health calculation:
+    - DELAYED: >20% tasks overdue
+    - AT_RISK: >0 tasks overdue OR >50% tasks blocked
+    - ON_TRACK: Everything else
+    """
+    from backend.app.models import Task, TaskStatus
+    
+    tasks = db.query(Task).filter(Task.project_id == project_id).all()
+    
+    if not tasks:
+        raise HTTPException(status_code=404, detail="Project not found or has no tasks")
+    
+    total = len(tasks)
+    completed = sum(1 for t in tasks if t.status == TaskStatus.COMPLETED)
+    blocked = sum(1 for t in tasks if t.status == TaskStatus.BLOCKED)
+    cancelled = sum(1 for t in tasks if t.status == TaskStatus.CANCELLED)
+    
+    now = datetime.utcnow()
+    overdue = sum(
+        1 for t in tasks 
+        if t.deadline and t.deadline < now and t.status not in [TaskStatus.COMPLETED, TaskStatus.CANCELLED]
+    )
+    
+    active_tasks = total - cancelled
+    overdue_percentage = (overdue / active_tasks * 100) if active_tasks > 0 else 0
+    blocked_percentage = (blocked / active_tasks * 100) if active_tasks > 0 else 0
+    completion_percentage = (completed / active_tasks * 100) if active_tasks > 0 else 0
+    
+    # Determine health status
+    if overdue_percentage > 20:
+        status = "DELAYED"
+    elif overdue > 0 or blocked_percentage > 50:
+        status = "AT_RISK"
+    else:
+        status = "ON_TRACK"
+    
+    return {
+        "project_id": project_id,
+        "status": status,
+        "completion_percentage": round(completion_percentage, 1),
+        "total_tasks": total,
+        "completed_tasks": completed,
+        "blocked_tasks": blocked,
+        "overdue_tasks": overdue,
+        "cancelled_tasks": cancelled
+    }
+
+
 @router.get("/weekly-report")
 async def get_weekly_report(
     project_id: Optional[str] = None,

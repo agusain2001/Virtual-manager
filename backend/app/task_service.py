@@ -100,6 +100,13 @@ class TaskService:
         if not task:
             raise ValueError(f"Task {task_id} not found")
         
+        # VALIDATION: Cannot set IN_PROGRESS or COMPLETED if BLOCKED
+        if task.status == TaskStatus.BLOCKED:
+            if new_status in [TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED]:
+                # Check if still has incomplete blockers
+                if not self._all_dependencies_complete(task_id):
+                    raise ValueError(f"Cannot proceed: task is blocked by incomplete dependencies")
+        
         old_status = task.status
         task.status = new_status
         task.updated_at = datetime.utcnow()
@@ -334,6 +341,19 @@ class TaskService:
         
         self.db.add(dependency)
         
+        # AUTO-BLOCK: If blocker is not complete, block the dependent task
+        if depends_on.status != TaskStatus.COMPLETED:
+            task.status = TaskStatus.BLOCKED
+            self._log_history(
+                task_id=task_id,
+                action="status_changed",
+                field_changed="status",
+                old_value=task.status.value,
+                new_value=TaskStatus.BLOCKED.value,
+                trigger="system",
+                reason=f"Auto-blocked: waiting on dependency {depends_on.name}"
+            )
+        
         # Log history
         self._log_history(
             task_id=task_id,
@@ -502,6 +522,20 @@ class TaskService:
                 all_deps_complete = self._all_dependencies_complete(dep_task.id)
                 
                 if all_deps_complete and dep_task.status == TaskStatus.BLOCKED:
+                    # AUTO-UNBLOCK: Change status from BLOCKED to NOT_STARTED
+                    dep_task.status = TaskStatus.NOT_STARTED
+                    dep_task.updated_at = datetime.utcnow()
+                    
+                    self._log_history(
+                        task_id=dep_task.id,
+                        action="status_changed",
+                        field_changed="status",
+                        old_value=TaskStatus.BLOCKED.value,
+                        new_value=TaskStatus.NOT_STARTED.value,
+                        trigger="system",
+                        reason="Auto-unblocked: all dependencies complete"
+                    )
+                    
                     self._log_agent_activity(
                         agent_name="ExecutionAgent",
                         activity_type="notification",
