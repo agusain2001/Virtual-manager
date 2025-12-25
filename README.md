@@ -37,7 +37,8 @@ graph TD
 ## ✨ Key Features
 
 - **🧠 Autonomous Planning**: Decomposes high-level goals (e.g., "Launch Marketing Campaign") into actionable steps and dependency graphs.
-- **🤝 People Operations**: Handling leave requests, team availability, and resource allocation automatically against policies.
+- **🤝 People Operations**: Handles leave requests with approval rationale, detects burnout risks, and manages skills/meetings.
+- **📈 Growth & Scaling**: Manages hiring pipelines, generates 30-60-90 day onboarding plans, and curates internal knowledge bases.
 - **👁️ Active Monitoring**: Continuously watches task statuses and proactively flags risks before deadlines are missed.
 - **� Managerial Intelligence**: Provides strategic risk analysis, goal refinement, and automates standups/reporting.
 - **�🛡️ Human Control Plane**: A "God Mode" dashboard to observe agent thought processes in real-time and intervene/override actions instantly.

@@ -9,6 +9,7 @@ The **Manager Orchestrator** is the root node of the LangGraph system. It acts a
 - **Routing Logic**:
   - `intent: planning` -> **Planning Agent**
   - `intent: personnel/leave` -> **People Ops Agent**
+  - `intent: hiring/growth` -> **Growth & Scaling Agent**
   - `intent: status/check` -> **Execution Agent**
   - `intent: notify` -> **Communication Agent**
   - `intent: strategy/risk` -> **Managerial Agent**
@@ -27,9 +28,20 @@ The **Manager Orchestrator** is the root node of the LangGraph system. It acts a
 *The HR Manager.*
 - **Role**: Manages the human constraints of the system.
 - **Capabilities**:
-  - **Leave Management**: Checks inputs against policy docs and calendar availability.
-  - **Availability**: Integrates with Google Calendar via MCP to find free slots.
-  - **Skill Matching**: Assigns tasks based on user profiles stored in the structured DB.
+  - **Leave Management**: Checks inputs against policy docs and calendar availability. **Requires rationale for all approvals/rejections.**
+  - **Burnout Detection**: Monitors sustained overload, deadline pressure, and overtime to flag risks.
+  - **Skill Matrix**: Tracks employee skills and identifies gaps for project assignments.
+  - **Meeting Scheduling**: Schedules meetings with conflict detection and working hours validation.
+
+## 📈 Growth & Scaling Agent (`backend/app/agents/growth_scaling.py`)
+
+*The Recruiter & Onboarding Specialist.*
+- **Role**: Manages hiring pipelines, recruitment operations, and knowledge continuity.
+- **Capabilities**:
+  - **Hiring Pipeline**: Tracks candidates from application to offer. **Requires human approval for job postings and rejections.**
+  - **Role Definition**: Structured job requirements with must-have vs. nice-to-have skills.
+  - **Onboarding**: Generates and tracks 30-60-90 day onboarding plans.
+  - **Knowledge Base**: Curates internal documentation and flags outdated content.
 
 ## ⚙️ Execution Agent (`backend/app/agents/execution.py`)
 
