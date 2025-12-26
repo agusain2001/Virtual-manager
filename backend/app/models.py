@@ -821,6 +821,48 @@ class User(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship to integrations
+    integrations = relationship("UserIntegration", back_populates="user", cascade="all, delete-orphan")
+
+
+class UserIntegration(Base):
+    """
+    Stores OAuth tokens for secondary providers (Google, Slack, etc.).
+    Enables "Connect Account" functionality for calendar and communication integrations.
+    """
+    __tablename__ = "user_integrations"
+    
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    provider = Column(String, nullable=False)  # google, slack, microsoft, etc.
+    
+    # OAuth tokens
+    access_token = Column(String)  # Should be encrypted in production
+    refresh_token = Column(String)  # For refreshing expired tokens
+    token_expires_at = Column(DateTime)  # When access token expires
+    scopes = Column(Text)  # JSON array of granted scopes
+    
+    # Provider-specific data
+    provider_user_id = Column(String)  # e.g., Google user ID or Slack user ID
+    provider_email = Column(String)  # Email from provider
+    provider_metadata = Column(Text)  # JSON for provider-specific data
+    
+    # Status tracking
+    is_active = Column(Boolean, default=True)
+    last_sync_at = Column(DateTime)
+    sync_error = Column(Text)  # Last error message if any
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship
+    user = relationship("User", back_populates="integrations")
+    
+    # Composite unique constraint
+    __table_args__ = (
+        Index('ix_user_provider', 'user_id', 'provider', unique=True),
+    )
 
 
 class AuditLog(Base):

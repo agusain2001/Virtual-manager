@@ -66,6 +66,17 @@ export default function VAMDashboard() {
                             {/* Divider */}
                             <div className="w-px h-8 bg-slate-600"></div>
 
+                            {/* Settings Link */}
+                            {isAuthenticated && (
+                                <a
+                                    href="/settings"
+                                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white"
+                                    title="Settings"
+                                >
+                                    ⚙️
+                                </a>
+                            )}
+
                             {/* Login Button */}
                             <LoginButton />
                         </div>

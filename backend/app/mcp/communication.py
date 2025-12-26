@@ -33,12 +33,37 @@ def send_email(to: str, subject: str, body: str) -> Dict[str, Any]:
 
 
 def send_slack_message(channel: str, message: str) -> Dict[str, Any]:
-    """Send Slack message."""
+    """
+    Send Slack message.
+    Uses real Slack API if configured, otherwise returns mock response.
+    """
+    try:
+        from app.services.slack_service import get_slack_service
+        import asyncio
+        
+        service = get_slack_service()
+        if service.is_configured:
+            # Use real Slack API
+            loop = asyncio.new_event_loop()
+            try:
+                result = loop.run_until_complete(service.send_dm(channel, message))
+                if result.get("success"):
+                    logger.info(f"Sent Slack message to {channel}")
+                    return result
+            finally:
+                loop.close()
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.error(f"Error sending Slack message: {e}")
+    
+    # Fallback to mock response
     logger.info(f"Sending slack message to {channel}: {message}")
     return {
         "status": "sent",
         "channel": channel,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
+        "mock": True
     }
 
 

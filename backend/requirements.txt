@@ -13,3 +13,10 @@ mcp
 httpx
 PyJWT
 python-multipart
+# Phase 2: Communication Integrations
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+slack-bolt
+slack-sdk
+apscheduler
