@@ -10,3 +10,6 @@ chromadb
 psycopg2-binary
 sqlalchemy
 mcp
+httpx
+PyJWT
+python-multipart

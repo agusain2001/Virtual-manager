@@ -10,12 +10,16 @@ import GoalTracker from '@/components/GoalTracker';
 import ExecutionDashboard from '@/components/ExecutionDashboard';
 import EscalationAlerts from '@/components/EscalationAlerts';
 import ProjectHealthDashboard from '@/components/ProjectHealthDashboard';
+import LoginButton from '@/components/LoginButton';
+import RepoSelector from '@/components/RepoSelector';
+import { useAuth } from '@/components/AuthContext';
 
 type TabType = 'overview' | 'tasks' | 'projects' | 'execution' | 'goals' | 'managerial';
 
 export default function VAMDashboard() {
     const [activeTab, setActiveTab] = useState<TabType>('overview');
     const [refreshKey, setRefreshKey] = useState(0);
+    const { isAuthenticated, user } = useAuth();
 
     const handleRefresh = () => {
         setRefreshKey(prev => prev + 1);
@@ -46,6 +50,9 @@ export default function VAMDashboard() {
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
+                            {/* GitHub Repo Selector - only show when authenticated */}
+                            {isAuthenticated && <RepoSelector />}
+
                             <button
                                 onClick={handleRefresh}
                                 className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white"
@@ -55,6 +62,12 @@ export default function VAMDashboard() {
                             </button>
                             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                             <span className="text-green-400 text-sm font-medium">System Online</span>
+
+                            {/* Divider */}
+                            <div className="w-px h-8 bg-slate-600"></div>
+
+                            {/* Login Button */}
+                            <LoginButton />
                         </div>
                     </div>
                 </div>

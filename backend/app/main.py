@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.database import engine, Base
 from backend.app.routes import router as api_router
-from backend.app.routers import managerial, goals, milestones, execution, people_ops, growth_scaling, analytics, platform, advanced
+from backend.app.routers import managerial, goals, milestones, execution, people_ops, growth_scaling, analytics, platform, advanced, auth, webhooks
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -24,6 +24,10 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(api_router)
+
+# Include authentication and webhook routers (no prefix for standard paths)
+app.include_router(auth.router)
+app.include_router(webhooks.router)
 
 # Include feature-specific routers
 app.include_router(managerial.router, prefix="/api")
@@ -54,7 +58,8 @@ async def root():
             "People & Operations",
             "Growth & Scaling",
             "Analytics & Automation",
-            "Platform & Enterprise (RBAC, Audit, MCP)"
+            "Platform & Enterprise (RBAC, Audit, MCP)",
+            "GitHub OAuth & Issue Sync"
         ]
     }
 

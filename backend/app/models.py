@@ -324,6 +324,14 @@ class Task(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at = Column(DateTime)
     
+    # GitHub Integration
+    github_issue_id = Column(Integer)  # GitHub issue ID
+    github_issue_number = Column(Integer)  # Issue number in repo
+    github_repo = Column(String)  # e.g., "owner/repo"
+    github_sync_status = Column(String, default="not_synced")  # not_synced, synced, syncing, error
+    github_synced_at = Column(DateTime)
+    github_issue_url = Column(String)  # Full URL to the issue
+    
     project = relationship("Project", back_populates="tasks")
     milestone = relationship("Milestone", back_populates="linked_tasks")
     dependencies = relationship(
@@ -802,6 +810,14 @@ class User(Base):
     
     # Multi-tenant support
     tenant_id = Column(String)
+    
+    # GitHub OAuth Integration
+    github_id = Column(String, unique=True)  # GitHub user ID
+    github_username = Column(String)  # GitHub username
+    github_access_token = Column(String)  # OAuth access token
+    github_token_scope = Column(String)  # Granted scopes
+    github_avatar_url = Column(String)  # Profile picture
+    default_github_repo = Column(String)  # Default repo for task sync
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

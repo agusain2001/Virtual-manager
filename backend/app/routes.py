@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -6,7 +6,9 @@ from datetime import datetime
 from backend.app.core.database import get_db
 from backend.app.task_service import TaskService
 from backend.app.project_service import ProjectService
-from backend.app.models import TaskStatus, TaskPriority, ProjectHealth
+from backend.app.models import TaskStatus, TaskPriority, ProjectHealth, Task, User
+from backend.app.services.github_service import github_service
+from backend.app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1", tags=["VAM"])
 
@@ -64,6 +66,11 @@ class TaskResponse(BaseModel):
     status: str
     deadline: Optional[datetime]
     created_at: datetime
+    # GitHub Integration fields
+    github_issue_number: Optional[int] = None
+    github_repo: Optional[str] = None
+    github_sync_status: Optional[str] = None
+    github_issue_url: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -375,6 +382,190 @@ async def get_prioritized_tasks(project_id: str, db: Session = Depends(get_db)):
     service = TaskService(db)
     tasks = service.prioritize_tasks(project_id)
     return tasks
+
+
+# ==================== GITHUB SYNC ENDPOINTS ====================
+
+@router.post("/tasks/{task_id}/sync-to-github")
+async def sync_task_to_github(
+    task_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Sync a task to GitHub as an issue.
+    Creates a new GitHub issue linked to this task.
+    Requires authenticated user with GitHub connected.
+    """
+    # Get current user
+    user = await get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    if not user.github_access_token:
+        raise HTTPException(status_code=400, detail="GitHub not connected. Please sign in with GitHub first.")
+    
+    if not user.default_github_repo:
+        raise HTTPException(status_code=400, detail="No default repository configured. Please set a default repo first.")
+    
+    # Get the task
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Check if already synced
+    if task.github_issue_number:
+        return {
+            "message": "Task already synced",
+            "github_issue_number": task.github_issue_number,
+            "github_issue_url": task.github_issue_url,
+            "sync_status": task.github_sync_status
+        }
+    
+    # Mark as syncing
+    task.github_sync_status = "syncing"
+    db.commit()
+    
+    try:
+        # Build issue body with task details
+        body_parts = []
+        if task.description:
+            body_parts.append(task.description)
+        body_parts.append(f"\n---\n**VAM Task Details**")
+        body_parts.append(f"- **Priority:** {task.priority.value if task.priority else 'medium'}")
+        body_parts.append(f"- **Status:** {task.status.value if task.status else 'not_started'}")
+        body_parts.append(f"- **Owner:** {task.owner}")
+        if task.deadline:
+            body_parts.append(f"- **Deadline:** {task.deadline.strftime('%Y-%m-%d')}")
+        body_parts.append(f"\n_Synced from Virtual AI Manager_")
+        
+        issue_body = "\n".join(body_parts)
+        
+        # Determine labels based on priority
+        labels = ["vam-sync"]
+        if task.priority:
+            priority_val = task.priority.value if hasattr(task.priority, 'value') else str(task.priority)
+            if priority_val in ["critical", "high"]:
+                labels.append("priority:high")
+            elif priority_val == "medium":
+                labels.append("priority:medium")
+            else:
+                labels.append("priority:low")
+        
+        # Create GitHub issue
+        issue = await github_service.create_issue(
+            access_token=user.github_access_token,
+            repo=user.default_github_repo,
+            title=task.name,
+            body=issue_body,
+            labels=labels
+        )
+        
+        # Update task with GitHub info
+        task.github_issue_id = issue["id"]
+        task.github_issue_number = issue["number"]
+        task.github_repo = user.default_github_repo
+        task.github_sync_status = "synced"
+        task.github_synced_at = datetime.utcnow()
+        task.github_issue_url = issue["html_url"]
+        task.last_update_at = datetime.utcnow()
+        
+        db.commit()
+        
+        # Log activity
+        from backend.app.models import AgentActivity
+        import uuid
+        activity = AgentActivity(
+            id=str(uuid.uuid4()),
+            agent_name="GitHubSync",
+            activity_type="sync",
+            message=f"Task '{task.name}' synced to GitHub issue #{issue['number']}",
+            related_task_id=task.id,
+            related_project_id=task.project_id
+        )
+        db.add(activity)
+        db.commit()
+        
+        return {
+            "message": "Task synced to GitHub successfully",
+            "github_issue_number": issue["number"],
+            "github_issue_url": issue["html_url"],
+            "github_repo": user.default_github_repo,
+            "sync_status": "synced"
+        }
+        
+    except Exception as e:
+        task.github_sync_status = "error"
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Failed to create GitHub issue: {str(e)}")
+
+
+@router.put("/tasks/{task_id}/sync-to-github")
+async def sync_task_updates_to_github(
+    task_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Sync task updates back to GitHub issue.
+    Updates the linked GitHub issue with current task state.
+    """
+    user = await get_current_user(request, db)
+    if not user or not user.github_access_token:
+        raise HTTPException(status_code=401, detail="Authentication required with GitHub connected")
+    
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    if not task.github_issue_number or not task.github_repo:
+        raise HTTPException(status_code=400, detail="Task not synced to GitHub yet")
+    
+    try:
+        # Determine if we need to close the issue
+        state = None
+        if task.status == TaskStatus.COMPLETED:
+            state = "closed"
+        elif task.status in [TaskStatus.NOT_STARTED, TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED]:
+            state = "open"
+        
+        # Build updated body
+        body_parts = []
+        if task.description:
+            body_parts.append(task.description)
+        body_parts.append(f"\n---\n**VAM Task Details**")
+        body_parts.append(f"- **Priority:** {task.priority.value if task.priority else 'medium'}")
+        body_parts.append(f"- **Status:** {task.status.value if task.status else 'not_started'}")
+        body_parts.append(f"- **Owner:** {task.owner}")
+        if task.deadline:
+            body_parts.append(f"- **Deadline:** {task.deadline.strftime('%Y-%m-%d')}")
+        body_parts.append(f"\n_Last synced: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}_")
+        
+        # Update GitHub issue
+        await github_service.update_issue(
+            access_token=user.github_access_token,
+            repo=task.github_repo,
+            issue_number=task.github_issue_number,
+            title=task.name,
+            body="\n".join(body_parts),
+            state=state
+        )
+        
+        task.github_sync_status = "synced"
+        task.github_synced_at = datetime.utcnow()
+        db.commit()
+        
+        return {
+            "message": "GitHub issue updated successfully",
+            "github_issue_number": task.github_issue_number,
+            "github_issue_url": task.github_issue_url,
+            "state": state
+        }
+        
+    except Exception as e:
+        task.github_sync_status = "error"
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Failed to update GitHub issue: {str(e)}")
 
 
 # ==================== ACTIVITY FEED ====================

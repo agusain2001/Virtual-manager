@@ -125,17 +125,81 @@ async def mitigate_risk(
 @router.get("/standup")
 async def get_daily_standup(
     project_id: Optional[str] = None,
+    user_id: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Generate daily standup summary from database activity."""
+    from datetime import datetime, timedelta
+    from backend.app.models import Task, TaskStatus
     from backend.app.agents.communication import CommunicationAgent
-    agent = CommunicationAgent()
     
-    # For now, return basic standup - we'd integrate with DB here
-    return {
-        "message": "Standup generation requires integration with task history",
-        "project_id": project_id
-    }
+    # Calculate yesterday and today
+    today = datetime.utcnow().date()
+    yesterday = today - timedelta(days=1)
+    
+    # Build query
+    query = db.query(Task)
+    if project_id:
+        query = query.filter(Task.project_id == project_id)
+    if user_id:
+        query = query.filter(Task.owner == user_id)
+    
+    tasks = query.all()
+    
+    # Categorize tasks
+    completed = [
+        t.name for t in tasks 
+        if t.status == TaskStatus.COMPLETED 
+        and t.completed_at 
+        and t.completed_at.date() >= yesterday
+    ]
+    
+    planned = [
+        t.name for t in tasks 
+        if t.status == TaskStatus.IN_PROGRESS 
+        or (t.deadline and t.deadline.date() == today and t.status == TaskStatus.NOT_STARTED)
+    ]
+    
+    blockers = [
+        f"{t.name} (since {t.updated_at.date()})" for t in tasks 
+        if t.status == TaskStatus.BLOCKED
+    ]
+    
+    # Try LLM-generated standup
+    agent = CommunicationAgent()
+    try:
+        result = agent.generate_standup(
+            user=user_id or "Team",
+            completed=completed,
+            planned=planned,
+            blockers=blockers
+        )
+        return {
+            "project_id": project_id,
+            "user_id": user_id,
+            "date": today.isoformat(),
+            **result
+        }
+    except Exception as e:
+        # Fallback to simple text format
+        return {
+            "project_id": project_id,
+            "user_id": user_id,
+            "date": today.isoformat(),
+            "summary": f"✅ Done: {len(completed)} | 🚧 Doing: {len(planned)} | 🚫 Blocked: {len(blockers)}",
+            "formatted_message": f"""**Daily Standup - {today}**
+
+✅ **Completed ({len(completed)}):**
+{chr(10).join(['- ' + c for c in completed]) or '- No tasks completed yesterday'}
+
+🚧 **In Progress ({len(planned)}):**
+{chr(10).join(['- ' + p for p in planned]) or '- No tasks in progress'}
+
+🚫 **Blockers ({len(blockers)}):**
+{chr(10).join(['- ' + b for b in blockers]) or '- No blockers'}
+""",
+            "needs_follow_up": len(blockers) > 0
+        }
 
 
 @router.post("/ask")
