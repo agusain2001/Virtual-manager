@@ -226,3 +226,237 @@ async def ask_question(
         "question": request.question,
         "answer": "Q&A functionality requires LLM configuration"
     }
+
+
+# ==================== APPROVAL ENDPOINTS (Phase 4: Safety & Governance) ====================
+
+class SubmitActionRequest(BaseModel):
+    """Request to submit an action for approval."""
+    action_type: str
+    action_summary: str
+    payload: Dict[str, Any] = {}
+    resource_type: Optional[str] = None
+    resource_id: Optional[str] = None
+    agent_name: str = "api"
+
+
+class DecisionRequest(BaseModel):
+    """Request to approve or reject an action."""
+    decision: str  # "approved" or "rejected"
+    reason: Optional[str] = None
+
+
+@router.get("/approvals/pending")
+async def get_pending_approvals(
+    db: Session = Depends(get_db)
+):
+    """
+    List all pending approval requests.
+    
+    Returns approvals sorted by risk score (highest first).
+    """
+    from backend.app.models import ApprovalRequest, ApprovalStatus
+    
+    approvals = db.query(ApprovalRequest).filter(
+        ApprovalRequest.status == ApprovalStatus.PENDING
+    ).order_by(ApprovalRequest.risk_score.desc()).all()
+    
+    return {
+        "count": len(approvals),
+        "approvals": [
+            {
+                "id": a.id,
+                "agent_name": a.agent_name,
+                "action_type": a.action_type,
+                "action_summary": a.action_summary,
+                "risk_score": a.risk_score,
+                "sensitivity": a.sensitivity.value if a.sensitivity else None,
+                "resource_type": a.resource_type,
+                "resource_id": a.resource_id,
+                "requester_name": a.requester_name,
+                "requested_at": a.requested_at.isoformat() if a.requested_at else None,
+                "impact_summary": a.impact_summary,
+                "is_reversible": a.is_reversible
+            }
+            for a in approvals
+        ]
+    }
+
+
+@router.get("/approvals/count")
+async def get_pending_count(
+    db: Session = Depends(get_db)
+):
+    """Get count of pending approvals for notification badge."""
+    from backend.app.agents.risk import RiskGateService
+    
+    risk_gate = RiskGateService(db)
+    count = risk_gate.get_pending_count()
+    
+    return {
+        "pending_count": count,
+        "has_pending": count > 0
+    }
+
+
+@router.post("/approvals/{approval_id}/decide")
+async def decide_approval(
+    approval_id: str,
+    request: DecisionRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Approve or reject a pending action.
+    
+    On approval, the action will be executed automatically.
+    """
+    from backend.app.models import ApprovalRequest, ApprovalStatus
+    from backend.app.agents.risk import RiskGateService
+    from datetime import datetime
+    
+    approval = db.query(ApprovalRequest).filter(
+        ApprovalRequest.id == approval_id
+    ).first()
+    
+    if not approval:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    
+    if approval.status != ApprovalStatus.PENDING:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Approval already resolved with status: {approval.status.value}"
+        )
+    
+    if request.decision not in ["approved", "rejected"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Decision must be 'approved' or 'rejected'"
+        )
+    
+    # Update approval status
+    approval.status = ApprovalStatus.APPROVED if request.decision == "approved" else ApprovalStatus.REJECTED
+    approval.resolved_at = datetime.utcnow()
+    approval.resolution_reason = request.reason
+    # Note: resolved_by should come from auth context in production
+    
+    db.commit()
+    
+    result = {
+        "approval_id": approval_id,
+        "decision": request.decision,
+        "status": approval.status.value
+    }
+    
+    # If approved, execute the action
+    if request.decision == "approved":
+        risk_gate = RiskGateService(db)
+        execution_result = await risk_gate.execute_approved_action(approval_id)
+        result["execution"] = execution_result
+    
+    return result
+
+
+@router.get("/approvals/{approval_id}")
+async def get_approval_details(
+    approval_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get detailed information about a specific approval request."""
+    from backend.app.models import ApprovalRequest
+    import json
+    
+    approval = db.query(ApprovalRequest).filter(
+        ApprovalRequest.id == approval_id
+    ).first()
+    
+    if not approval:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    
+    # Parse payload JSON
+    try:
+        payload = json.loads(approval.payload) if approval.payload else {}
+    except json.JSONDecodeError:
+        payload = {}
+    
+    return {
+        "id": approval.id,
+        "agent_name": approval.agent_name,
+        "action_type": approval.action_type,
+        "action_summary": approval.action_summary,
+        "payload": payload,
+        "risk_score": approval.risk_score,
+        "sensitivity": approval.sensitivity.value if approval.sensitivity else None,
+        "resource_type": approval.resource_type,
+        "resource_id": approval.resource_id,
+        "requester_id": approval.requester_id,
+        "requester_name": approval.requester_name,
+        "requested_at": approval.requested_at.isoformat() if approval.requested_at else None,
+        "status": approval.status.value if approval.status else None,
+        "resolved_by": approval.resolved_by,
+        "resolved_at": approval.resolved_at.isoformat() if approval.resolved_at else None,
+        "resolution_reason": approval.resolution_reason,
+        "impact_summary": approval.impact_summary,
+        "is_reversible": approval.is_reversible
+    }
+
+
+@router.post("/submit-action")
+async def submit_action_for_approval(
+    request: SubmitActionRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Submit an action for risk assessment and potential approval.
+    
+    If risk score is below threshold, action proceeds immediately.
+    If above threshold, creates pending approval request.
+    """
+    from backend.app.agents.risk import RiskGateService
+    
+    risk_gate = RiskGateService(db)
+    
+    # Assess risk first
+    assessment = risk_gate.assess_risk(request.action_type, request.payload)
+    
+    if not assessment["requires_approval"]:
+        # Low risk - could execute immediately
+        # For now, just return the assessment
+        return {
+            "status": "auto_approved",
+            "risk_assessment": assessment,
+            "message": "Action approved automatically (low risk)"
+        }
+    
+    # High risk - submit for approval
+    # Using a placeholder user_id - in production, get from auth
+    result = await risk_gate.submit_for_approval(
+        user_id="system",  # Would come from auth context
+        agent_name=request.agent_name,
+        action_type=request.action_type,
+        action_summary=request.action_summary,
+        payload=request.payload,
+        resource_type=request.resource_type,
+        resource_id=request.resource_id
+    )
+    
+    return {
+        "status": "pending_approval",
+        "risk_assessment": assessment,
+        **result
+    }
+
+
+@router.post("/assess-risk")
+async def assess_action_risk(
+    action_type: str,
+    payload: Dict[str, Any] = {},
+    db: Session = Depends(get_db)
+):
+    """
+    Assess risk for an action without submitting for approval.
+    Useful for previewing risk level before committing.
+    """
+    from backend.app.agents.risk import RiskGateService
+    
+    risk_gate = RiskGateService(db)
+    return risk_gate.assess_risk(action_type, payload)

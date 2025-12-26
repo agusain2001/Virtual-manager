@@ -287,3 +287,287 @@ class RiskAgent:
             project_id=project_id
         )
         self.db.add(log)
+
+
+# ==================== RISK GATE SERVICE (Phase 4: Safety & Governance) ====================
+
+# Risk scoring dictionary - higher score = more dangerous
+RISK_SCORES: Dict[str, int] = {
+    # Destructive actions - maximum risk
+    "delete_repo": 100,
+    "delete_project": 90,
+    "delete_all_tasks": 95,
+    "fire_employee": 100,
+    "terminate_contract": 95,
+    
+    # External communications - high risk
+    "send_external_email": 60,
+    "post_to_slack_channel": 50,
+    "create_public_issue": 55,
+    
+    # Data modifications - medium risk
+    "bulk_update_tasks": 45,
+    "reassign_all_tasks": 50,
+    "change_project_deadline": 40,
+    "close_all_issues": 70,
+    
+    # Standard operations - low risk
+    "create_meeting": 10,
+    "schedule_focus_block": 5,
+    "update_task": 5,
+    "create_task": 5,
+    "add_comment": 5,
+    "create_issue": 10,
+}
+
+# Default threshold - actions above this require approval
+DEFAULT_APPROVAL_THRESHOLD = 50
+
+
+class RiskGateService:
+    """
+    Risk Gate Service for intercepting and gating high-risk AI actions.
+    
+    Every agent should pass through this gate before executing sensitive actions.
+    Actions above the risk threshold are queued for human approval.
+    
+    Phase 4: Safety & Governance implementation.
+    """
+    
+    def __init__(self, db: Session, approval_threshold: int = DEFAULT_APPROVAL_THRESHOLD):
+        self.db = db
+        self.approval_threshold = approval_threshold
+    
+    def assess_risk(self, action_type: str, payload: Optional[Dict] = None) -> Dict[str, Any]:
+        """
+        Assess the risk level of an action.
+        
+        Args:
+            action_type: The type of action (e.g., "delete_project")
+            payload: The action parameters
+        
+        Returns:
+            Risk assessment with score and whether approval is required
+        """
+        # Get base risk score
+        base_score = RISK_SCORES.get(action_type, 25)  # Default to 25 for unknown
+        
+        # Adjust score based on payload characteristics
+        adjusted_score = base_score
+        
+        if payload:
+            # Bulk operations are riskier
+            if payload.get("count", 1) > 10:
+                adjusted_score = min(100, adjusted_score + 20)
+            
+            # Operations affecting multiple users are riskier
+            if payload.get("affects_users", 0) > 5:
+                adjusted_score = min(100, adjusted_score + 15)
+            
+            # Irreversible operations are riskier
+            if payload.get("irreversible", False):
+                adjusted_score = min(100, adjusted_score + 25)
+        
+        requires_approval = adjusted_score >= self.approval_threshold
+        
+        return {
+            "action_type": action_type,
+            "base_score": base_score,
+            "adjusted_score": adjusted_score,
+            "requires_approval": requires_approval,
+            "threshold": self.approval_threshold,
+            "risk_level": self._get_risk_level(adjusted_score)
+        }
+    
+    def _get_risk_level(self, score: int) -> str:
+        """Convert numeric score to risk level string."""
+        if score >= 80:
+            return "critical"
+        elif score >= 60:
+            return "high"
+        elif score >= 40:
+            return "medium"
+        elif score >= 20:
+            return "low"
+        return "minimal"
+    
+    async def submit_for_approval(
+        self,
+        user_id: str,
+        agent_name: str,
+        action_type: str,
+        action_summary: str,
+        payload: Dict[str, Any],
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Submit an action for human approval.
+        
+        Args:
+            user_id: The user requesting the action
+            agent_name: Which agent is requesting (e.g., "github", "calendar")
+            action_type: Type of action
+            action_summary: Human-readable description
+            payload: Full action parameters (stored as JSON)
+            resource_type: Optional type of resource being acted upon
+            resource_id: Optional ID of resource
+        
+        Returns:
+            The created ApprovalRequest
+        """
+        from backend.app.models import ApprovalRequest, ApprovalStatus, ActionSensitivity, User
+        
+        # Assess risk
+        risk_assessment = self.assess_risk(action_type, payload)
+        
+        # Get user name
+        user = self.db.query(User).filter(User.id == user_id).first()
+        requester_name = user.name if user else "Unknown"
+        
+        # Determine sensitivity from risk level
+        risk_level = risk_assessment["risk_level"]
+        sensitivity_map = {
+            "critical": ActionSensitivity.CRITICAL,
+            "high": ActionSensitivity.HIGH,
+            "medium": ActionSensitivity.MEDIUM,
+            "low": ActionSensitivity.LOW,
+        }
+        sensitivity = sensitivity_map.get(risk_level, ActionSensitivity.MEDIUM)
+        
+        # Create approval request
+        approval = ApprovalRequest(
+            id=str(uuid.uuid4()),
+            agent_name=agent_name,
+            action_type=action_type,
+            action_summary=action_summary,
+            payload=json.dumps(payload),
+            risk_score=risk_assessment["adjusted_score"],
+            sensitivity=sensitivity,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            requester_id=user_id,
+            requester_name=requester_name,
+            status=ApprovalStatus.PENDING,
+            is_reversible=not payload.get("irreversible", False),
+            impact_summary=f"Risk Level: {risk_level.upper()} (Score: {risk_assessment['adjusted_score']}/100)"
+        )
+        
+        self.db.add(approval)
+        self.db.commit()
+        self.db.refresh(approval)
+        
+        logger.info(f"Submitted action for approval: {action_type} (risk: {risk_assessment['adjusted_score']})")
+        
+        return {
+            "approval_id": approval.id,
+            "status": "pending",
+            "risk_score": risk_assessment["adjusted_score"],
+            "risk_level": risk_level,
+            "message": f"Action requires approval. Risk score: {risk_assessment['adjusted_score']}/100"
+        }
+    
+    async def execute_approved_action(self, approval_id: str) -> Dict[str, Any]:
+        """
+        Execute an action that has been approved.
+        
+        This method looks up the approval, validates it's approved,
+        then executes the stored action.
+        
+        Args:
+            approval_id: The approval request ID
+        
+        Returns:
+            Execution result
+        """
+        from backend.app.models import ApprovalRequest, ApprovalStatus, AuditLog
+        
+        approval = self.db.query(ApprovalRequest).filter(
+            ApprovalRequest.id == approval_id
+        ).first()
+        
+        if not approval:
+            return {"success": False, "error": "Approval not found"}
+        
+        if approval.status != ApprovalStatus.APPROVED:
+            return {"success": False, "error": f"Approval status is {approval.status.value}, not approved"}
+        
+        # Parse the stored payload
+        try:
+            payload = json.loads(approval.payload) if approval.payload else {}
+        except json.JSONDecodeError:
+            payload = {}
+        
+        # Execute based on action type
+        result = await self._execute_action(
+            approval.action_type,
+            payload,
+            approval.agent_name
+        )
+        
+        # Log the execution
+        audit_log = AuditLog(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.utcnow(),
+            actor_id=approval.resolved_by or approval.requester_id,
+            actor_name="System (Post-Approval)",
+            action=approval.action_type,
+            resource_type=approval.resource_type or "unknown",
+            resource_id=approval.resource_id,
+            outcome="success" if result.get("success") else "failure",
+            error_message=result.get("error"),
+            reason=f"Approved action executed. Approval ID: {approval_id}"
+        )
+        self.db.add(audit_log)
+        self.db.commit()
+        
+        return result
+    
+    async def _execute_action(
+        self,
+        action_type: str,
+        payload: Dict[str, Any],
+        agent_name: str
+    ) -> Dict[str, Any]:
+        """
+        Execute a specific action type.
+        
+        This is the dispatch point for actually performing approved actions.
+        """
+        # Map action types to handlers
+        # In a full implementation, each action would have a specific handler
+        
+        logger.info(f"Executing approved action: {action_type} from {agent_name}")
+        
+        # For now, return success - actual implementations would go here
+        # Example handlers would be:
+        # - "delete_project" -> call project service to delete
+        # - "create_meeting" -> call calendar service
+        # - "send_external_email" -> call email service
+        
+        return {
+            "success": True,
+            "action_type": action_type,
+            "agent_name": agent_name,
+            "message": f"Action '{action_type}' executed successfully",
+            "payload": payload
+        }
+    
+    def get_pending_count(self, user_id: Optional[str] = None) -> int:
+        """Get count of pending approvals."""
+        from backend.app.models import ApprovalRequest, ApprovalStatus
+        
+        query = self.db.query(ApprovalRequest).filter(
+            ApprovalRequest.status == ApprovalStatus.PENDING
+        )
+        
+        if user_id:
+            query = query.filter(ApprovalRequest.requester_id == user_id)
+        
+        return query.count()
+
+
+# Singleton getter for RiskGateService
+def get_risk_gate_service(db: Session) -> RiskGateService:
+    """Factory function to create RiskGateService instance."""
+    return RiskGateService(db)

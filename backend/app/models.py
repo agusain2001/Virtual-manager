@@ -925,10 +925,17 @@ class ApprovalRequest(Base):
     """
     Approval workflow for sensitive actions.
     Maps to: Approval Workflows requirements.
+    
+    Phase 4: Extended with Risk Gate fields for action interception.
     """
     __tablename__ = "approval_requests"
     
     id = Column(String, primary_key=True)
+    
+    # Phase 4: Risk Gate fields
+    agent_name = Column(String)  # e.g., "people_ops", "github", "calendar"
+    payload = Column(Text)  # JSON - the full action arguments
+    risk_score = Column(Integer, default=0)  # 0-100 risk assessment
     
     # What needs approval
     action_type = Column(String, nullable=False)  # delete_data, send_external, hire_decision
@@ -943,7 +950,7 @@ class ApprovalRequest(Base):
     is_reversible = Column(Boolean, default=True)
     
     # Request info
-    requester_id = Column(String, nullable=False)
+    requester_id = Column(String, ForeignKey("users.id"), nullable=False)
     requester_name = Column(String)
     requested_at = Column(DateTime, default=datetime.utcnow)
     
@@ -961,6 +968,9 @@ class ApprovalRequest(Base):
     resolution_reason = Column(Text)
     
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    requester = relationship("User", backref="approval_requests")
 
 
 class SystemState(Base):
