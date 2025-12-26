@@ -42,10 +42,13 @@ graph TD
 
 ## ✨ Key Features (Phases 1-6 Complete)
 
-### Phase 1-2: Core Foundation & Managerial Intelligence
+### Phase 1-2: Core Foundation & Communication
 - **🧠 Autonomous Planning**: Decomposes goals into actionable DAGs with dependency tracking
 - **📋 Task & Project Management**: Full lifecycle management with milestones and goals
 - **🐙 GitHub Integration**: Bi-directional sync with GitHub Issues, OAuth login, and webhook automation
+- **📅 Google Calendar**: Real-time calendar sync, free slot detection, focus block scheduling
+- **💬 Slack Integration**: Socket Mode bot, DM handling, proactive standups
+- **☀️ Morning Standups**: Automated 09:00 check-ins with GitHub issue context
 - **👁️ Active Monitoring**: Proactive risk detection and deadline tracking
 - **📊 Managerial Intelligence**: Strategic risk analysis, goal refinement, automated reporting
 
@@ -85,6 +88,8 @@ graph TD
 - **Node.js** 18+
 - **Git**
 - **GitHub OAuth App** (Client ID & Secret)
+- **Google OAuth App** (for Calendar - optional)
+- **Slack App** (for Slack integration - optional)
 
 ### Installation
 
@@ -158,7 +163,9 @@ Virtual-manager/
 │   │   │   ├── growth_service.py    # Applications & onboarding
 │   │   │   ├── analytics_service.py # Dashboard & rules
 │   │   │   ├── platform_service.py  # Tenants & audit export
-│   │   │   └── github_service.py    # GitHub API & Sync
+│   │   │   ├── github_service.py    # GitHub API & Sync
+│   │   │   ├── google_calendar_service.py  # Google Calendar API
+│   │   │   └── slack_service.py     # Slack Socket Mode
 │   │   ├── routers/             # API Routers (auth, webhooks, etc)
 │   │   ├── mcp/                 # MCP Tool Servers
 │   │   ├── models.py            # 30+ SQLAlchemy models
@@ -188,6 +195,8 @@ Virtual-manager/
 | Platform | `/api/v1/platform/*` | Users, RBAC, audit, tools |
 | Managerial | `/api/v1/managerial/*` | Risk, reports, strategy |
 | Auth | `/auth/*` | GitHub OAuth, session, repo selection |
+| Google | `/auth/google/*` | Calendar OAuth, connect/disconnect |
+| Slack | `/auth/slack/*` | User linking, bot status, test DM |
 | Webhooks | `/webhooks/*` | GitHub inbound event processing |
 
 ## 🤝 Contributing

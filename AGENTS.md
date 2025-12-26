@@ -133,13 +133,41 @@ generate_onboarding_tasks(db, plan_id, employee_name, role, start_date) -> Dict
 
 ## 📣 Communication Agent (`backend/app/agents/communication.py`)
 
-*The Spokesperson.*
+*The Spokesperson & Proactive Communicator.*
 
-- **Role**: Manages all outgoing information to humans.
+- **Role**: Manages all outgoing information to humans and drives proactive engagement.
 - **Capabilities**:
   - **Summarization**: Compresses complex logs into readable status updates.
   - **Routing**: Decides whether to ping via Slack (urgent) or Email (digest).
   - **Tone Adaptation**: Adjusts language based on audience (technical dev vs. executive).
+  - **Slack Integration**: Real-time messaging via Socket Mode.
+  - **Morning Standups**: Proactive 09:00 check-ins via Slack DM.
+  - **Calendar Blocking**: Creates focus time blocks based on user responses.
+
+### Standup Handler (`backend/app/agents/standup_handler.py`)
+```python
+initiate_standup(user_id, db) -> Dict
+# Fetches GitHub issues, sends Slack prompt, tracks conversation state
+
+process_standup_response(user_id, response_text, db) -> Dict
+# Parses focus from response, finds free slot, schedules calendar block
+
+extract_focus_from_response(text) -> Optional[str]
+# NLP extraction: "I'm working on the API" -> "API"
+```
+
+### Service Layer (`backend/app/services/slack_service.py`)
+- `SlackService` class - Socket Mode bot with message handlers
+- `send_dm()` - Send direct messages to Slack users
+- `get_user_info()` - Fetch Slack user profile
+- `send_standup_prompt()` - Send formatted standup message with GitHub issues
+- `link_slack_user()` - Map Slack User ID to VAM user
+
+### Service Layer (`backend/app/services/google_calendar_service.py`)
+- `GoogleCalendarService` class - Full Calendar API integration
+- `get_daily_schedule()` - Events + free slots analysis
+- `schedule_focus_block()` - Create focus time blocks
+- `move_event()` - Reschedule flexible meetings
 
 ---
 
@@ -223,6 +251,7 @@ require_permission(resource, action)  # FastAPI dependency decorator
 ### Enterprise Models
 - **AuditLog**: Immutable record with prompt/response for AI actions
 - **AgentActivity**: Log of agent actions (syncs, notifications) for timeline view
+- **UserIntegration**: OAuth tokens for secondary providers (Google, Slack)
 - **RolePermission**: Granular role → resource → action mappings
 - **Tenant**: Multi-tenancy with subscription tiers and limits
 - **MCPTool**: Tool registry with safety gates and health tracking
@@ -289,6 +318,20 @@ VAM uses the **Model Context Protocol (MCP)** to interact with the outside world
    - **VAM → GitHub**: Updates to Task title/desc push to Issue.
    - **GitHub → VAM**: Webhook triggers on Issue Close → Marks Task Completed.
 6. **Audit**: Sync events logged to `AgentActivity`.
+
+### Morning Standup Flow (Phase 2)
+1. **Trigger**: Scheduler fires at 09:00 local time.
+2. **Standup Handler**: Queries all users with linked Slack accounts.
+3. **For Each User**:
+   - Fetches assigned GitHub Issues via `GitHubService`.
+   - Sends Slack DM: "Good morning! I see 3 issues assigned to you. What's your focus?"
+4. **User Response**: "I'm working on the API."
+5. **Standup Handler**:
+   - Parses response via `extract_focus_from_response()`.
+   - Calls `find_free_slot()` on Google Calendar.
+   - Creates focus block via `schedule_focus_block()`.
+6. **Confirmation DM**: "Got it! I've blocked 10am-12pm for 'API Work'."
+7. **Audit**: Standup logged to `AgentActivity`.
 
 ### Hiring Pipeline Flow
 1. **Input**: "Post a new Backend Engineer role".
