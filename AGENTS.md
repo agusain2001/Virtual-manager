@@ -274,6 +274,52 @@ require_permission(resource, action)  # FastAPI dependency decorator
 
 ---
 
+## 🧠 Cognitive Persistence (`backend/app/core/memory.py`)
+
+*The Long-Term Memory.*
+
+- **Role**: Stores and retrieves semantic context using vector embeddings.
+- **Components**:
+  - **Vector Store**: PostgreSQL with `pgvector` extension.
+  - **Embeddings**: OpenAI `text-embedding-3-small` (1536 dimensions).
+  - **Retrieval**: Cosine similarity search for relevant context query.
+- **Memory Types**:
+  - `DECISION`: Strategic choices made by agents.
+  - `PREFERENCE`: User preferences learned over time.
+  - `STANDUP_FOCUS`: Daily focus items from standups.
+  - `TASK_COMPLETION`: Completed work context.
+- **Context Injection**:
+  - `MemoryService.retrieve_context()` finds relevant memories.
+  - `format_context_for_prompt()` injects them into Agent system prompts.
+  - Enables agents to "remember" past instructions and project history.
+
+---
+
+## 🛡️ Safety & Governance (`backend/app/agents/risk.py`)
+
+*The Safety Valve.*
+
+- **Role**: Prevents catastrophic AI mistakes by intercepting high-risk actions.
+- **Risk Gate Service**:
+  - **Scoring**: Actions are scored 0-100 (e.g., `delete_project`=90, `create_task`=5).
+  - **Threshold**: Actions > 50 require human approval.
+- **Intervention Flow**:
+  1. Agent proposes action (e.g., "Delete Repository").
+  2. `@require_approval` decorator calls `RiskGateService.assess_risk()`.
+  3. Risk Score is 100 -> **Blocked**.
+  4. `ApprovalRequest` created with status `PENDING`.
+  5. UI shows **Intervention Modal**.
+  6. Manager clicks "Approve" -> Action executes.
+- **Audit Logging**:
+  - `@log_activity` decorator automatically records:
+    - Actor (User/Agent)
+    - Action Type & Payload
+    - Timestamp & Duration
+    - Outcome (Success/Failure)
+  - Stored in `audit_logs` table for compliance.
+
+---
+
 ## 🔌 MCP Tool Integration
 
 VAM uses the **Model Context Protocol (MCP)** to interact with the outside world safely.

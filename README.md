@@ -58,13 +58,19 @@ graph TD
 - **⚖️ Capacity Planning**: `get_available_hours()`, `check_overload()` functions
 - **🔥 Burnout Watchdog**: Sustained overload and deadline pressure monitoring
 
-### Phase 4: Growth Intelligence
+### Phase 4: Cognitive Persistence (New)
+- **🧠 Long-Term Memory**: Vector embeddings (OpenAI `text-embedding-3-small`) to recall past decisions
+- **📚 Context Injection**: Semantic search retrieves relevant history into agent prompts
+- **📌 Semantic Search**: `pgvector` integration for finding related tasks, plans, and meetings
+- **🔄 Auto-Memory triggers**: Daily standup focus and task completions are automatically memorized
+
+### Phase 5: Growth Intelligence
 - **📈 Hiring Pipeline**: Candidate tracking with automated resume scoring
 - **✅ Interview Management**: Scheduling, feedback collection, offer workflows
 - **🎯 Onboarding**: 30-60-90 day plans with auto-generated tasks
 - **📚 Knowledge Base**: Internal documentation with role-based curation
 
-### Phase 5: Analytics & Automation
+### Phase 6: Analytics & Automation
 - **📉 Velocity Tracking**: Task completion trends and projected dates
 - **⚠️ Risk Scoring**: Weighted algorithm (overdue × 5, blocked × 3, load × 10)
 - **📊 Executive Dashboards**: Goal + project + risk summaries
@@ -72,13 +78,13 @@ graph TD
 - **📸 Project Snapshots**: Historical metrics for trend analysis
 - **🔮 AI Forecasting**: Completion predictions with confidence scores
 
-### Phase 6: Platform & Enterprise Readiness
+### Phase 7: Safety & Governance (Implemented)
+- **🛡️ Risk Gate**: Intercepts high-risk actions (score > 50) for human approval
+- **✋ Intervention UI**: Modal to review, approve, or reject agent actions
 - **🔐 RBAC**: Role-based access (Admin, Manager, Contributor, Viewer)
-- **📝 Audit Logging**: Immutable logs with AI prompt/response capture
-- **✅ Approval Workflows**: Sensitive actions require human approval
-- **🏢 Multi-Tenancy**: Data isolation with subscription tiers
-- **🔌 MCP Tool Registry**: Dynamic tool discovery with safety gates
-- **🔄 Circuit Breaker**: Auto-disables failing tools after 5 errors
+- **📝 Immutable Audit Logs**: Automatic `@log_activity` capture for all sensitive ops
+- **✅ Approval Workflow**: Async approval requests with risk scoring (Critical/High/Medium)
+- **🔌 MCP Tool Safety**: Circuit breakers and permissions for tool execution
 
 ## 🚀 Getting Started
 
