@@ -193,13 +193,7 @@ meeting_participants = Table(
     Column('employee_id', String, ForeignKey('employees.id'), primary_key=True)
 )
 
-# Task Dependencies - DAG relationships (blocker -> blocked)
-task_dependencies = Table(
-    'task_dependencies',
-    Base.metadata,
-    Column('blocker_id', String, ForeignKey('tasks.id'), primary_key=True),
-    Column('blocked_id', String, ForeignKey('tasks.id'), primary_key=True)
-)
+
 
 # ==================== MODELS ====================
 
@@ -444,7 +438,7 @@ class AgentActivity(Base):
     message = Column(Text, nullable=False)
     related_task_id = Column(String, ForeignKey("tasks.id"))
     related_project_id = Column(String, ForeignKey("projects.id"))
-    metadata = Column(Text)  # JSON string for additional context
+    activity_metadata = Column(Text)  # JSON string for additional context
 
 
 class Holiday(Base):
@@ -883,12 +877,12 @@ class UserIntegration(Base):
     )
 
 
-class AuditLog(Base):
+class AgentAuditLog(Base):
     """
     Immutable audit trail for all system actions.
     Maps to: Audit Trails requirements - who, what, when, why.
     """
-    __tablename__ = "audit_logs"
+    __tablename__ = "agent_audit_logs"
     
     id = Column(String, primary_key=True)
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -906,7 +900,7 @@ class AuditLog(Base):
     
     # Details
     changes = Column(Text)  # JSON of before/after values
-    metadata = Column(Text)  # Additional context
+    audit_metadata = Column(Text)  # Additional context
     
     # Why
     reason = Column(Text)
@@ -1545,7 +1539,7 @@ class Memory(Base):
     embedding = Column(Vector(1536)) if PGVECTOR_AVAILABLE else Column(Text)
     
     # Additional context
-    metadata = Column(Text)  # JSON for extra context (source, related entities, etc.)
+    memory_metadata = Column(Text)  # JSON for extra context (source, related entities, etc.)
     source = Column(String)  # Where the memory came from (standup, task, chat, etc.)
     
     # Relevance tracking

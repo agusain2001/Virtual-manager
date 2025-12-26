@@ -18,7 +18,7 @@ from openai import OpenAI
 import os
 
 from backend.app.models import (
-    Project, Task, TaskStatus, Risk, RiskLevel, DecisionLog, ProjectHealth
+    Project, Task, TaskStatus, Risk, RiskLevel, DecisionLog, ProjectHealth, AgentAuditLog
 )
 from backend.app.core.logging import logger
 
@@ -480,7 +480,7 @@ class RiskGateService:
         Returns:
             Execution result
         """
-        from backend.app.models import ApprovalRequest, ApprovalStatus, AuditLog
+        from backend.app.models import ApprovalRequest, ApprovalStatus, AgentAuditLog
         
         approval = self.db.query(ApprovalRequest).filter(
             ApprovalRequest.id == approval_id
@@ -506,7 +506,7 @@ class RiskGateService:
         )
         
         # Log the execution
-        audit_log = AuditLog(
+        audit_log = AgentAuditLog(
             id=str(uuid.uuid4()),
             timestamp=datetime.utcnow(),
             actor_id=approval.resolved_by or approval.requester_id,

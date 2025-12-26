@@ -59,7 +59,7 @@ def log_agent_activity(
         message=message,
         related_task_id=task_id,
         related_project_id=project_id,
-        metadata=json.dumps(metadata) if metadata else None
+        activity_metadata=json.dumps(metadata) if metadata else None
     )
     db.add(activity)
 

@@ -340,7 +340,7 @@ class ExecutionAgent:
             activity_type="decision",
             message=decision,
             related_task_id=task_id,
-            metadata=json.dumps({"actions": actions})
+            activity_metadata=json.dumps({"actions": actions})
         )
         self.db.add(activity)
         self.db.commit()

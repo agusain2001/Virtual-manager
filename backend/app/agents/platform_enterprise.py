@@ -28,7 +28,7 @@ from functools import wraps
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from backend.app.models import (
-    User, UserRole, AuditLog, ApprovalRequest, ApprovalStatus,
+    User, UserRole, AgentAuditLog, ApprovalRequest, ApprovalStatus,
     SystemState, OperationLock, OperationStatus, ActionSensitivity,
     AgentActivity
 )
@@ -390,7 +390,7 @@ class PlatformEnterpriseAgent:
         
         Logs every action, decision, and tool call with who, what, when, why.
         """
-        log = AuditLog(
+        log = AgentAuditLog(
             id=str(uuid.uuid4()),
             actor_id=actor_id or "system",
             actor_name=actor_name,
@@ -400,7 +400,7 @@ class PlatformEnterpriseAgent:
             resource_id=resource_id,
             resource_name=resource_name,
             changes=changes,
-            metadata=metadata,
+            audit_metadata=metadata,
             reason=reason,
             outcome=outcome,
             error_message=error_message,
@@ -416,16 +416,16 @@ class PlatformEnterpriseAgent:
         limit: int = 50
     ) -> List[Dict[str, Any]]:
         """Get audit trail with filters."""
-        query = self.db.query(AuditLog)
+        query = self.db.query(AgentAuditLog)
         
         if resource_type:
-            query = query.filter(AuditLog.resource_type == resource_type)
+            query = query.filter(AgentAuditLog.resource_type == resource_type)
         if resource_id:
-            query = query.filter(AuditLog.resource_id == resource_id)
+            query = query.filter(AgentAuditLog.resource_id == resource_id)
         if actor_id:
-            query = query.filter(AuditLog.actor_id == actor_id)
+            query = query.filter(AgentAuditLog.actor_id == actor_id)
         
-        logs = query.order_by(desc(AuditLog.timestamp)).limit(limit).all()
+        logs = query.order_by(desc(AgentAuditLog.timestamp)).limit(limit).all()
         
         return [{
             "id": l.id,

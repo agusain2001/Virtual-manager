@@ -102,7 +102,7 @@ class MemoryService:
             content=content,
             memory_type=memory_type,
             embedding=embedding if PGVECTOR_AVAILABLE else json.dumps(embedding) if embedding else None,
-            metadata=json.dumps(metadata) if metadata else None,
+            memory_metadata=json.dumps(metadata) if metadata else None,
             source=source,
             created_at=datetime.utcnow()
         )
@@ -183,7 +183,7 @@ class MemoryService:
         embedding_str = f"[{','.join(map(str, query_embedding))}]"
         
         sql = text("""
-            SELECT id, content, memory_type, metadata, source, created_at, access_count,
+            SELECT id, content, memory_type, memory_metadata, source, created_at, access_count,
                    1 - (embedding <=> :embedding) as similarity
             FROM memories
             WHERE user_id = :user_id
