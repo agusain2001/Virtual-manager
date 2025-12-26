@@ -162,8 +162,8 @@ export default function SettingsPage() {
                 {/* Message Banner */}
                 {message && (
                     <div className={`mb-6 p-4 rounded-lg ${message.type === 'success'
-                            ? 'bg-green-500/20 border border-green-500/50 text-green-400'
-                            : 'bg-red-500/20 border border-red-500/50 text-red-400'
+                        ? 'bg-green-500/20 border border-green-500/50 text-green-400'
+                        : 'bg-red-500/20 border border-red-500/50 text-red-400'
                         }`}>
                         {message.text}
                         <button
@@ -305,7 +305,7 @@ export default function SettingsPage() {
                                 </div>
                                 <div>
                                     <span className="text-slate-500">Default Repo:</span>
-                                    <span className="text-white ml-2">{user?.default_repo || 'Not set'}</span>
+                                    <span className="text-white ml-2">{user?.default_github_repo || 'Not set'}</span>
                                 </div>
                             </div>
                         </div>
